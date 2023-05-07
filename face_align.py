@@ -4,7 +4,27 @@ import numpy as np
 from mtcnn import MTCNN
 detector = MTCNN()
 
-def get_xy_from_value(img, value):
+## New shape here in pixels ##
+new_shape = (500,500)
+
+## Images folder ##
+images_dir = 'remove bg'
+
+## Output directory ##
+output_dir = 'results'
+
+
+# definitions
+def get_xy_from_value(img: np.ndarray, value: int):
+    '''
+    Gets the x,y coordinates of pixel above a given threshold
+    
+    Args:
+        img: the image to search (has to be a 2D mask)
+        value: the threshold value
+    
+    return: x,y tuple
+    '''
     x=[]
     y=[]
     row, col = img.shape
@@ -15,24 +35,40 @@ def get_xy_from_value(img, value):
                 y.append(i) # get y indices
     return x,y
 
-def center_image(image, new_shape):
+def center_image(image: np.ndarray, new_shape: tuple(int)):
     '''
-    new_shape: (width, height)
+    This method shrinks the image border to non-transparent objects
+    
+    Args:
+        image: the iamge to change
+        new_shape: the desired new shape in case the new size has to be different
+    
+    return:
+        the new image as numpy ndarray
     
     '''
-    
+    # get one channel as a mask
     mask = image[:,:,2]
+    
+    # clear the image from residual pixels with low values
     x,y = get_xy_from_value(mask,10)
+    
+    # reduce the image border to include only non transparent pixels
     centered_img = image[min(y):max(y),min(x):max(x),:]
     
+    # so a softmax to determine the hoorizontal heavy point of the image which will be a horizontal center
     h,w,_ = centered_img.shape
     x_center = np.argmax(np.convolve(centered_img[:,:,3].sum(axis=0), np.ones(int(w/5)), 'same'))
     left_side = x_center 
     right_side = w - x_center
+    
+    # define paddings
     padding_left = max(left_side,right_side) - left_side
     padding_right = max(left_side,right_side) - right_side
     centered_img = cv2.copyMakeBorder(centered_img, 0, 0, padding_left, padding_right, cv2.BORDER_CONSTANT, value=0)
     
+    # scale the image to match the input scale
+    # calculate the scale form the largest of height/width
     h,w,_ = centered_img.shape
     if w > h:
         scale = new_shape[0]/w
@@ -45,10 +81,11 @@ def center_image(image, new_shape):
     centered_img = cv2.resize(centered_img,(int(w * scale), int(h * scale)))
     output_img = cv2.copyMakeBorder(centered_img, offset_h, offset_h, offset_w, offset_w, cv2.BORDER_CONSTANT, value=0)
     output_img = cv2.resize(output_img,new_shape)
+    
     return output_img
 
 class FaceAligner:
-    #modify the box size with changing the values for desiredLeftEye
+    
     def __init__(self, desiredLeftEye=(0.30, 0.30),
         desiredFaceWidth=224, desiredFaceHeight=None):
         # store the facial landmark predictor, desired output left
@@ -62,7 +99,7 @@ class FaceAligner:
             self.desiredFaceHeight = self.desiredFaceWidth
     def align(self, image, left_eye, right_eye):
         
-        # compute the angle between the eye centroids
+        # compute the angle between the eyes centers
         dY = right_eye[1] - left_eye[1]
         dX = right_eye[0] - left_eye[0]
         angle = np.degrees(np.arctan2(dY, dX))
@@ -102,18 +139,28 @@ class FaceAligner:
     
 if __name__=='__main__':   
     
-    for file in os.listdir('remove bg/'):
-        print(file)
-        image = cv2.imread(os.path.join('remove bg',file), cv2.IMREAD_UNCHANGED)
-        new_shape = (500,500)
-        centered_img = center_image(image, new_shape)
-        fa = FaceAligner(desiredFaceWidth=200, desiredLeftEye=(0.42,0.46))
-        
-        faces = detector.detect_faces(centered_img[:,:,:3])
-        if len(faces)>0:
-            output_img = fa.align(centered_img, faces[0]['keypoints']['left_eye'], faces[0]['keypoints']['right_eye'])
-        else:
-            print(f'face not detected in image: {file}')
-            # output_img = centered_img
-            continue
-        cv2.imwrite(os.path.join('results_3',file), output_img)
+    # Create the output folder
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Check if the input folder exists
+    if not os.path.exists(images_dir) or len(os.listdir(images_dir))==0 :
+        print(f'no images to align in folder {output_dir}')
+    else:
+        for file in os.listdir(images_dir):
+            # list all files in the image directory and read them one by one
+            print(file)
+            image = cv2.imread(os.path.join('remove bg',file), cv2.IMREAD_UNCHANGED)
+            # remove the transparent part of the image
+            centered_img = center_image(image, new_shape)
+            # find the face and center the image around it
+            fa = FaceAligner(desiredFaceWidth=200, desiredLeftEye=(0.42,0.46)) 
+            faces = detector.detect_faces(centered_img[:,:,:3])
+            if len(faces)>0:
+                output_img = fa.align(centered_img, faces[0]['keypoints']['left_eye'], faces[0]['keypoints']['right_eye'])
+            else:
+                # if the face is not found print a message and dont save the iamge
+                print(f'face not detected in image: {file}')
+                continue
+            # save the centered image
+            cv2.imwrite(os.path.join(output_dir,file), output_img)
