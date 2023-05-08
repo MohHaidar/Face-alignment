@@ -9,9 +9,9 @@ Python version >= 3.4
 
 ## Installation
 
-1- For windows you need a python IDE (vscode, pycharm, etc..)\n
-2- Make sure you are using python version 3.4 or higher\n
-3- Download this repository to your local machine and extract it, or use git clone.\n
+1- For windows you need a python IDE (vscode, pycharm, etc..)  
+2- Make sure you are using python version 3.4 or higher  
+3- Download this repository to your local machine and extract it, or use git clone.  
 4- install the requirements using the following code (make sure you are connected to the internet):
 ```
 pip install -r requirements.txt
@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 
 
-1-Copy your images to the folder /remove bg\n
+1-Copy your images to the folder /remove bg  
 2-Run the face_align.py script with arguments: width of the resulted image, desired face ratio, images folder, output images folder
 example:
 ```
