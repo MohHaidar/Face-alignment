@@ -1,19 +1,36 @@
 import os
+import sys
 import cv2
 import numpy as np
+import io
+from contextlib import contextmanager
 from mtcnn import MTCNN
 detector = MTCNN()
 
 ## New shape here in pixels ##
-new_shape = (500,500)
+# new_shape = (500,500)
+new_shape = (int(sys.argv[1]), int(sys.argv[1]))
+
+## Ratio of face to image
+# face_ratio = 0.5
+face_ratio = float(sys.argv[2])
 
 ## Images folder ##
-images_dir = 'remove bg'
+# images_dir = 'remove bg'
+images_dir = str(sys.argv[3])
 
 ## Output directory ##
-output_dir = 'results'
+# output_dir = 'results'
+output_dir = str(sys.argv[4])
 
-
+# Contextmanager to supress CPU/GPU messages
+@contextmanager
+def nostdout():
+    sys.stdout = io.StringIO()
+    yield
+    sys.stdout = sys.__stdout__
+    
+    
 # definitions
 def get_xy_from_value(img: np.ndarray, value: int):
     '''
@@ -35,7 +52,7 @@ def get_xy_from_value(img: np.ndarray, value: int):
                 y.append(i) # get y indices
     return x,y
 
-def center_image(image: np.ndarray, new_shape: tuple(int)):
+def center_image(image: np.ndarray, new_shape: (int, int)):
     '''
     This method shrinks the image border to non-transparent objects
     
@@ -109,9 +126,9 @@ class FaceAligner:
         desiredRightEyeX = 1.0 - self.desiredLeftEye[0]
         
         # determine the scale of the new resulting image by taking
-        # the ratio of the distance between eyes in the *current*
+        # the ratio of the distance between eyes in the current
         # image to the ratio of distance between eyes in the
-        # *desired* image
+        # desired image
         dist = np.sqrt((dX ** 2) + (dY ** 2))
         desiredDist = (desiredRightEyeX - self.desiredLeftEye[0])
         desiredDist *= self.desiredFaceWidth
@@ -142,10 +159,10 @@ if __name__=='__main__':
     # Create the output folder
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    
+    print('Processing images...')
     # Check if the input folder exists
     if not os.path.exists(images_dir) or len(os.listdir(images_dir))==0 :
-        print(f'no images to align in folder {output_dir}')
+        print(f'no images to align in folder {images_dir}')
     else:
         for file in os.listdir(images_dir):
             # list all files in the image directory and read them one by one
@@ -154,8 +171,9 @@ if __name__=='__main__':
             # remove the transparent part of the image
             centered_img = center_image(image, new_shape)
             # find the face and center the image around it
-            fa = FaceAligner(desiredFaceWidth=200, desiredLeftEye=(0.42,0.46)) 
-            faces = detector.detect_faces(centered_img[:,:,:3])
+            fa = FaceAligner(desiredFaceWidth=int(new_shape[0]*face_ratio), desiredLeftEye=(0.5-face_ratio/4,0.46)) 
+            with nostdout():
+                faces = detector.detect_faces(centered_img[:,:,:3])
             if len(faces)>0:
                 output_img = fa.align(centered_img, faces[0]['keypoints']['left_eye'], faces[0]['keypoints']['right_eye'])
             else:
